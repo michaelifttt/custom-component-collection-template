@@ -1,5 +1,5 @@
 import React, { FC, useMemo, useState, useCallback } from "react";
-import { Retool } from "@tryretool/custom-component-support";
+import { useRetoolState, useRetoolEventCallback } from "@tryretool/custom-component-support";
 import styles from "./GanttChart.module.css";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -9,7 +9,7 @@ type Assignee = {
   name: string;
   initials?: string;
   color?: string;
-  avatar?: string; // profile picture URL
+  avatar?: string;
 };
 
 type Task = {
@@ -23,7 +23,6 @@ type Task = {
   assignees?: Assignee[];
 };
 
-// Retool user shape from the Retool API resource
 type RetoolUser = {
   id?: string | number;
   email?: string;
@@ -38,14 +37,14 @@ type Column = { label: string; x: number; width: number };
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const ROW_HEIGHT    = 64;
+const ROW_HEIGHT = 64;
 const HEADER_HEIGHT = 52;
-const LABEL_WIDTH   = 240;
-const BAR_HEIGHT    = 28;
-const BAR_RADIUS    = 7;
-const AVATAR_R      = 13;
-const AVATAR_GAP    = 5;
-const MAX_AVATARS   = 3;
+const LABEL_WIDTH = 240;
+const BAR_HEIGHT = 28;
+const BAR_RADIUS = 7;
+const AVATAR_R = 13;
+const AVATAR_GAP = 5;
+const MAX_AVATARS = 3;
 
 const PALETTE = [
   "#6BBAFF", "#8B7EFF", "#2EC98A", "#F59E0B",
@@ -62,19 +61,19 @@ const DAY_WIDTH: Record<string, number> = { day: 40, week: 24, month: 12 };
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
 const parseDate = (s: string) => new Date(s + "T00:00:00");
-const diffDays  = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / 86_400_000);
-const addDays   = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+const diffDays = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / 86_400_000);
+const addDays = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
 
 function getWeek(d: Date): number {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const day  = date.getUTCDay() || 7;
+  const day = date.getUTCDay() || 7;
   date.setUTCDate(date.getUTCDate() + 4 - day);
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
   return Math.ceil(((date.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
 }
 
 function buildColumns(start: Date, end: Date, mode: string): Column[] {
-  const dw   = DAY_WIDTH[mode] ?? 24;
+  const dw = DAY_WIDTH[mode] ?? 24;
   const cols: Column[] = [];
   if (mode === "day") {
     const total = diffDays(start, end);
@@ -96,8 +95,8 @@ function buildColumns(start: Date, end: Date, mode: string): Column[] {
     let cur = new Date(start.getFullYear(), start.getMonth(), 1);
     while (cur < end) {
       const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-      const x    = Math.max(0, diffDays(start, cur)) * dw;
-      const w    = Math.min(diffDays(cur, next), diffDays(start, end) - Math.max(0, diffDays(start, cur))) * dw;
+      const x = Math.max(0, diffDays(start, cur)) * dw;
+      const w = Math.min(diffDays(cur, next), diffDays(start, end) - Math.max(0, diffDays(start, cur))) * dw;
       if (w > 0) cols.push({ label: cur.toLocaleDateString("en-US", { month: "short", year: "numeric" }), x, width: w });
       cur = next;
     }
@@ -119,9 +118,9 @@ function resolveAssignees(assignees: Assignee[], userMap: Map<string, RetoolUser
     const fullName = user.name ?? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim();
     return {
       ...a,
-      name:    fullName || a.name,
+      name: fullName || a.name,
       initials: a.initials ?? getInitials(fullName || a.name),
-      avatar:  user.profilePhotoUrl ?? user.avatar ?? a.avatar,
+      avatar: user.profilePhotoUrl ?? user.avatar ?? a.avatar,
     };
   });
 }
@@ -129,10 +128,10 @@ function resolveAssignees(assignees: Assignee[], userMap: Map<string, RetoolUser
 // ─── SVG Avatar Stack (on bar) ────────────────────────────────────────────────
 
 function SvgAvatarStack({ assignees, x, y, taskId }: { assignees: Assignee[]; x: number; y: number; taskId: string }) {
-  const visible  = assignees.slice(0, MAX_AVATARS);
+  const visible = assignees.slice(0, MAX_AVATARS);
   const overflow = assignees.length - MAX_AVATARS;
-  const step     = AVATAR_R * 2 - AVATAR_GAP;
-  const totalW   = visible.length * step + (overflow > 0 ? step : 0);
+  const step = AVATAR_R * 2 - AVATAR_GAP;
+  const totalW = visible.length * step + (overflow > 0 ? step : 0);
 
   return (
     <g transform={`translate(${x - totalW}, ${y - AVATAR_R})`}>
@@ -218,40 +217,19 @@ function HtmlAvatar({ assignee, index }: { assignee: Assignee; index: number }) 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const GanttChart: FC = () => {
-  const [rawTasks] = Retool.useStateArray({
-    name: "tasks",
-    label: "Tasks",
-    description: "Array of tasks: { id, name, start, end, progress?, group?, color?, assignees?: [{ id?, name, initials?, color?, avatar? }] }",
-    defaultValue: [],
-  });
-  const [rawUsers] = Retool.useStateArray({
-    name: "users",
-    label: "Users",
-    description: "Retool org users — bind to a Retool API users query. Used to resolve avatars and names from assignee id.",
-    defaultValue: [],
-  });
-  const [viewMode] = Retool.useStateString({
-    name: "viewMode",
-    label: "View Mode",
-    description: "day | week | month",
-    defaultValue: "week",
-  });
-  const [, setSelectedTask] = Retool.useStateObject({
-    name: "selectedTask",
-    label: "Selected Task",
-    description: "Last clicked task object including resolved assignees",
-    defaultValue: null,
-  });
-  const onTaskClick = Retool.useEventCallback({ name: "taskClick" });
+  const [rawTasks] = useRetoolState<object[]>("tasks", []);
+  const [rawUsers] = useRetoolState<object[]>("users", []);
+  const [viewMode] = useRetoolState<string>("viewMode", "week");
+  const [, setSelectedTask] = useRetoolState<object | null>("selectedTask", null);
+  const onTaskClick = useRetoolEventCallback("taskClick");
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const tasks = (rawTasks as Task[]) ?? [];
   const users = (rawUsers as RetoolUser[]) ?? [];
-  const mode  = (viewMode as string) || "week";
-  const dayW  = DAY_WIDTH[mode] ?? 24;
+  const mode = (viewMode as string) || "week";
+  const dayW = DAY_WIDTH[mode] ?? 24;
 
-  // Build a map of user id → user for fast lookup
   const userMap = useMemo(() => {
     const map = new Map<string, RetoolUser>();
     users.forEach(u => { if (u.id != null) map.set(String(u.id), u); });
@@ -260,9 +238,9 @@ export const GanttChart: FC = () => {
 
   const { rangeStart, totalDays, columns } = useMemo(() => {
     if (tasks.length === 0) {
-      const now   = new Date();
+      const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      const end   = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+      const end = new Date(now.getFullYear(), now.getMonth() + 3, 0);
       return { rangeStart: start, totalDays: diffDays(start, end), columns: buildColumns(start, end, mode) };
     }
     let min = parseDate(tasks[0].start);
@@ -273,7 +251,7 @@ export const GanttChart: FC = () => {
       if (e > max) max = e;
     });
     const start = addDays(min, -7);
-    const end   = addDays(max, 7);
+    const end = addDays(max, 7);
     return { rangeStart: start, totalDays: diffDays(start, end), columns: buildColumns(start, end, mode) };
   }, [tasks, mode]);
 
@@ -299,11 +277,11 @@ export const GanttChart: FC = () => {
   }, [rangeStart, dayW]);
 
   const handleClick = useCallback((task: Task, resolved: Assignee[]) => {
-    setSelectedTask({ ...task, assignees: resolved } as unknown as Record<string, unknown>);
+    setSelectedTask({ ...task, assignees: resolved });
     onTaskClick();
   }, [setSelectedTask, onTaskClick]);
 
-  const todayX    = diffDays(rangeStart, new Date()) * dayW;
+  const todayX = diffDays(rangeStart, new Date()) * dayW;
   const showToday = todayX >= 0 && todayX <= chartW;
 
   return (
@@ -367,15 +345,15 @@ export const GanttChart: FC = () => {
               stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
 
             {tasks.map((task, i) => {
-              const { x, w }  = barProps(task);
-              const rowY      = HEADER_HEIGHT + i * ROW_HEIGHT;
-              const barY      = rowY + (ROW_HEIGHT - BAR_HEIGHT) / 2;
-              const color     = task.color ?? colorMap[task.group ?? task.id] ?? PALETTE[0];
-              const progress  = Math.min(100, Math.max(0, task.progress ?? 0));
-              const hovered   = hoveredId === task.id;
-              const resolved  = resolveAssignees(task.assignees ?? [], userMap);
-              const avatarX   = x + w - 4;
-              const avatarY   = rowY + ROW_HEIGHT / 2;
+              const { x, w } = barProps(task);
+              const rowY = HEADER_HEIGHT + i * ROW_HEIGHT;
+              const barY = rowY + (ROW_HEIGHT - BAR_HEIGHT) / 2;
+              const color = task.color ?? colorMap[task.group ?? task.id] ?? PALETTE[0];
+              const progress = Math.min(100, Math.max(0, task.progress ?? 0));
+              const hovered = hoveredId === task.id;
+              const resolved = resolveAssignees(task.assignees ?? [], userMap);
+              const avatarX = x + w - 4;
+              const avatarY = rowY + ROW_HEIGHT / 2;
 
               return (
                 <g key={task.id}>

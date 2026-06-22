@@ -1,5 +1,5 @@
 import React, { FC, useRef, useState, useEffect } from 'react'
-import { Retool } from '@tryretool/custom-component-support'
+import { useRetoolState, useRetoolEventCallback } from '@tryretool/custom-component-support'
 import { QRCodeCanvas } from 'qrcode.react'
 import styles from './QRCodeGenerator.module.css'
 
@@ -29,79 +29,17 @@ const CheckIcon = () => (
 /* ── Component ── */
 
 export const QRCodeGenerator: FC = () => {
-  Retool.useComponentSettings({ defaultWidth: 280, defaultHeight: 380 })
-
-  /* ── Inputs ── */
-
-  const [value] = Retool.useStateString({
-    name: 'value',
-    label: 'Value',
-    description: 'Text or URL to encode in the QR code',
-    initialValue: 'https://retool.com',
-  })
-
-  const [size] = Retool.useStateNumber({
-    name: 'size',
-    label: 'Size (px)',
-    description: 'Width and height of the QR code in pixels',
-    initialValue: 200,
-  })
-
-  const [fgColor] = Retool.useStateString({
-    name: 'fgColor',
-    label: 'Foreground color',
-    description: 'QR code dot color (hex)',
-    initialValue: '#000000',
-  })
-
-  const [bgColor] = Retool.useStateString({
-    name: 'bgColor',
-    label: 'Background color',
-    description: 'QR code background color (hex)',
-    initialValue: '#FFFFFF',
-  })
-
-  const [errorLevel] = Retool.useStateString({
-    name: 'errorLevel',
-    label: 'Error correction',
-    description: 'L = 7%, M = 15%, Q = 25%, H = 30%. Use H when embedding a logo.',
-    initialValue: 'M',
-  })
-
-  const [logoUrl] = Retool.useStateString({
-    name: 'logoUrl',
-    label: 'Logo URL',
-    description: 'Optional image URL to embed in the center of the QR code',
-    initialValue: '',
-  })
-
-  const [logoSize] = Retool.useStateNumber({
-    name: 'logoSize',
-    label: 'Logo size (%)',
-    description: 'Logo width as a percentage of the QR code size (5–30). Ignored if no logo URL.',
-    initialValue: 20,
-  })
-
-  const [title] = Retool.useStateString({
-    name: 'title',
-    label: 'Title',
-    description: 'Label shown below the QR code',
-    initialValue: '',
-  })
-
-  /* ── Outputs ── */
-
-  const [, setDataUrl] = Retool.useStateString({
-    name: 'dataUrl',
-    label: 'Data URL',
-    description: 'QR code as a PNG data URL — use in Image components or store in a DB column',
-    initialValue: '',
-  })
-
-  /* ── Events ── */
-
-  const onDownload = Retool.useEventCallback({ name: 'download' })
-  const onCopy = Retool.useEventCallback({ name: 'copy' })
+  const [value] = useRetoolState<string>('value', 'https://retool.com')
+  const [size] = useRetoolState<number>('size', 200)
+  const [fgColor] = useRetoolState<string>('fgColor', '#000000')
+  const [bgColor] = useRetoolState<string>('bgColor', '#FFFFFF')
+  const [errorLevel] = useRetoolState<string>('errorLevel', 'M')
+  const [logoUrl] = useRetoolState<string>('logoUrl', '')
+  const [logoSize] = useRetoolState<number>('logoSize', 20)
+  const [title] = useRetoolState<string>('title', '')
+  const [, setDataUrl] = useRetoolState<string>('dataUrl', '')
+  const _onDownload = useRetoolEventCallback('download')
+  const _onCopy = useRetoolEventCallback('copy')
 
   /* ── Derived values ── */
 
@@ -116,7 +54,6 @@ export const QRCodeGenerator: FC = () => {
   /* ── Local state ── */
 
   const canvasRef = useRef<HTMLDivElement>(null)
-  // localDataUrl drives the download <a> href — updated whenever QR changes
   const [localDataUrl, setLocalDataUrl] = useState('')
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState(false)
@@ -141,15 +78,13 @@ export const QRCodeGenerator: FC = () => {
   }, [safeValue, safeSize, fgColor, bgColor, safeErrorLevel, logoUrl, safeLogoSize, setDataUrl])
 
   /* ── Copy value text to clipboard ── */
-  // Copying image data requires ClipboardItem which is blocked in iframes.
-  // Copying the encoded text is more reliable and just as useful.
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(safeValue)
       setCopied(true)
       setCopyError(false)
-      onCopy()
+      _onCopy()
       setTimeout(() => setCopied(false), 2000)
     } catch {
       setCopyError(true)
@@ -169,7 +104,6 @@ export const QRCodeGenerator: FC = () => {
     <div className={styles.root}>
       <div className={styles.card}>
 
-        {/* QR Code canvas */}
         <div className={styles.qrWrap} ref={canvasRef}>
           <QRCodeCanvas
             value={safeValue}
@@ -182,24 +116,20 @@ export const QRCodeGenerator: FC = () => {
           />
         </div>
 
-        {/* Title */}
         {title?.trim() && (
           <div className={styles.title}>{title.trim()}</div>
         )}
 
-        {/* Encoded value preview */}
         <div className={styles.valuePreview} title={safeValue}>
           {safeValue}
         </div>
 
-        {/* Actions */}
         <div className={styles.actions}>
-          {/* Real <a> tag — direct user click on anchor works in iframes, programmatic .click() does not */}
           <a
             className={styles.btn}
             href={localDataUrl || undefined}
             download={downloadFilename}
-            onClick={() => { if (localDataUrl) onDownload() }}
+            onClick={() => { if (localDataUrl) _onDownload() }}
             aria-disabled={!localDataUrl}
           >
             <DownloadIcon />
@@ -217,6 +147,6 @@ export const QRCodeGenerator: FC = () => {
         </div>
 
       </div>
-    </div>
+    </div >
   )
 }

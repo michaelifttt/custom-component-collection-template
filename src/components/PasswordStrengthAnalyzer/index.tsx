@@ -1,18 +1,11 @@
 import React, { useEffect } from 'react'
 import { type FC } from 'react'
-import { Retool } from '@tryretool/custom-component-support'
+import { useRetoolState } from '@tryretool/custom-component-support'
 import { calculateStrength } from './utils'
 
 export const PasswordStrengthAnalyzer: FC = () => {
-    const [password, _setPassword] = Retool.useStateString({
-        name: 'password'
-    })
-
-    const [score, setScore] = Retool.useStateNumber({
-        name: 'score',
-        initialValue: 0,
-        inspector: 'hidden'
-    })
+    const [password, _setPassword] = useRetoolState<string>('password', '')
+    const [score, setScore] = useRetoolState<number>('score', 0)
 
     useEffect(() => {
         const newScore = calculateStrength(password)

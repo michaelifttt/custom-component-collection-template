@@ -1,11 +1,9 @@
 import React from 'react'
 import { type FC } from 'react'
-import { Retool } from '@tryretool/custom-component-support'
+import { useRetoolState } from '@tryretool/custom-component-support'
 
 export const HelloWorld: FC = () => {
-    const [name, _setName] = Retool.useStateString({
-        name: 'name'
-    })
+    const [name, _setName] = useRetoolState<string>('name', '')
 
     return (
         <div>

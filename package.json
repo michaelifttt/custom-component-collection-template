@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@tryretool/custom-component-support": "latest",
+    "@tryretool/custom-component-support": "^0.0.7",
     "qrcode.react": "^4.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
@@ -39,9 +39,9 @@
     "vitest": "^4.0.17"
   },
   "retoolCustomComponentLibraryConfig": {
-    "name": "custom-component-collection",
-    "label": "Custom Component Collection",
-    "description": "A collection of reusable Retool custom components",
+    "name": "search-highlight",
+    "label": "Custom Components",
+    "description": "Cmd+F style text search with highlighting",
     "entryPoint": "src/index.tsx",
     "outputPath": "dist"
   }

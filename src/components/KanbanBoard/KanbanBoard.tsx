@@ -1,5 +1,5 @@
 import React, { FC, useState, useMemo, useCallback, useRef, useEffect } from 'react'
-import { Retool } from '@tryretool/custom-component-support'
+import { useRetoolState, useRetoolEventCallback } from '@tryretool/custom-component-support'
 import styles from './KanbanBoard.module.css'
 
 /* ── Types ── */
@@ -261,51 +261,14 @@ const CardModal: React.FC<{
 /* ── Main Component ── */
 
 export const KanbanBoard: FC = () => {
-  Retool.useComponentSettings({ defaultWidth: 960, defaultHeight: 600 })
-
-  const [rawCards] = Retool.useStateArray({
-    name: 'cards',
-    label: 'Cards',
-    description: 'Array of cards: { id, title, description?, column, priority?, assignees?, tags?, dueDate? }',
-    defaultValue: [],
-  })
-
-  const [rawColumns] = Retool.useStateArray({
-    name: 'columns',
-    label: 'Columns',
-    description: 'Array of columns: { id, name, color?, limit? }. Leave empty to use default columns.',
-    defaultValue: [],
-  })
-
-  const [rawUsers] = Retool.useStateArray({
-    name: 'users',
-    label: 'Users',
-    description: 'Retool users for avatar photos: { id, firstName, lastName, profilePhotoUrl }',
-    defaultValue: [],
-  })
-
-  const [allowDrag] = Retool.useStateBoolean({
-    name: 'allowDrag',
-    label: 'Allow drag & drop',
-    defaultValue: true,
-  })
-
-  const [, setSelectedCard] = Retool.useStateObject({
-    name: 'selectedCard',
-    label: 'Selected Card',
-    description: 'Last clicked card object',
-    defaultValue: null,
-  })
-
-  const [, setMovedCard] = Retool.useStateObject({
-    name: 'movedCard',
-    label: 'Moved Card',
-    description: 'Most recently moved card, with its new column id',
-    defaultValue: null,
-  })
-
-  const onCardClick = Retool.useEventCallback({ name: 'cardClick' })
-  const onCardMoved = Retool.useEventCallback({ name: 'cardMoved' })
+  const [rawCards] = useRetoolState<object[]>('cards', [])
+  const [rawColumns] = useRetoolState<object[]>('columns', [])
+  const [rawUsers] = useRetoolState<object[]>('users', [])
+  const [allowDrag] = useRetoolState<boolean>('allowDrag', true)
+  const [, setSelectedCard] = useRetoolState<object | null>('selectedCard', null)
+  const [, setMovedCard] = useRetoolState<object | null>('movedCard', null)
+  const onCardClick = useRetoolEventCallback('cardClick')
+  const onCardMoved = useRetoolEventCallback('cardMoved')
 
   /* ── Data ── */
 
@@ -327,7 +290,7 @@ export const KanbanBoard: FC = () => {
   const userMap = useMemo(() => {
     const m = new Map<string, RetoolUser>()
     if (Array.isArray(rawUsers)) {
-      ;(rawUsers as RetoolUser[]).forEach(u => { if (u.id) m.set(String(u.id), u) })
+      ; (rawUsers as RetoolUser[]).forEach(u => { if (u.id) m.set(String(u.id), u) })
     }
     return m
   }, [rawUsers])
@@ -416,11 +379,10 @@ export const KanbanBoard: FC = () => {
     }
   }, [cardMap, setMovedCard, onCardMoved])
 
-  /* ── Drag handlers (on the drag handle, not the card) ── */
+  /* ── Drag handlers ── */
 
   const handleDragStart = useCallback((e: React.DragEvent, cardId: string, sourceCol: string) => {
     e.dataTransfer.effectAllowed = 'move'
-    // Show the parent card as the drag ghost
     const cardEl = (e.currentTarget as HTMLElement).closest('[data-card]') as HTMLElement | null
     if (cardEl) e.dataTransfer.setDragImage(cardEl, 20, 20)
     dragRef.current = { cardId, sourceCol }
@@ -462,7 +424,7 @@ export const KanbanBoard: FC = () => {
     dragRef.current = null
   }, [dropBeforeId, moveCard])
 
-  /* ── Card click (plain onClick — no draggable on the card itself) ── */
+  /* ── Card click ── */
 
   const handleCardClick = useCallback((card: KanbanCard, colId: string) => {
     setExpandedEntry({ card, colId })
@@ -525,8 +487,6 @@ export const KanbanBoard: FC = () => {
                   return (
                     <React.Fragment key={card.id}>
                       {isDropTarget && <div className={styles.dropIndicator} />}
-
-                      {/* Card: NOT draggable — clean onClick works perfectly */}
                       <div
                         data-card
                         className={`${styles.card} ${isDragging ? styles.cardDragging : ''}`}
@@ -554,7 +514,6 @@ export const KanbanBoard: FC = () => {
                             )}
                           </div>
 
-                          {/* Drag handle — only this is draggable */}
                           {allowDrag && (
                             <div
                               className={styles.dragHandle}
